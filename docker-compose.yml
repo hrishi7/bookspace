@@ -1,0 +1,101 @@
+version: '3.8'
+
+services:
+  # PostgreSQL for User and Notification data
+  postgres:
+    image: postgres:15-alpine
+    container_name: bookspace-postgres
+    environment:
+      POSTGRES_USER: bookspace
+      POSTGRES_PASSWORD: bookspace_dev_password
+      POSTGRES_DB: bookspace
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bookspace"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MongoDB for Document data
+  mongodb:
+    image: mongo:7
+    container_name: bookspace-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for caching and rate limiting
+  redis:
+    image: redis:7-alpine
+    container_name: bookspace-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # RabbitMQ for message queue
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: bookspace-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: bookspace
+      RABBITMQ_DEFAULT_PASS: bookspace_dev_password
+    ports:
+      - "5672:5672"   # AMQP port
+      - "15672:15672" # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Prometheus for metrics
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: bookspace-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+
+  # Grafana for visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: bookspace-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+
+volumes:
+  postgres_data:
+  mongo_data:
+  redis_data:
+  rabbitmq_data:
+  prometheus_data:
+  grafana_data:
