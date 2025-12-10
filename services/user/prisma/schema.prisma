@@ -1,0 +1,50 @@
+// Prisma Schema for User Service
+//
+// Interview Topic: ORM vs Raw SQL
+//
+// ORM (Object-Relational Mapping):
+// Pros: Type safety, auto-generated queries, migration management, prevents SQL injection
+// Cons: Learning curve, less control, sometimes slower
+//
+// Prisma provides: Type-safe ORM + Raw SQL option for complex queries
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User Model
+//
+// Interview Topic: Soft Delete Pattern
+// Hard Delete: DELETE FROM users WHERE id = ? (permanent)
+// Soft Delete: UPDATE users SET deleted_at = NOW() WHERE id = ? (recoverable)
+// We use soft delete for user accounts
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String   // bcrypt hash
+  name      String
+  role      Role     @default(USER)
+  
+  // Soft delete
+  deletedAt DateTime? @map("deleted_at")
+  
+  // Timestamps
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  @@map("users")
+  @@index([email])
+  @@index([deletedAt]) // For filtering deleted users
+}
+
+// Role Enum for RBAC (Role-Based Access Control)
+enum Role {
+  USER
+  ADMIN
+}

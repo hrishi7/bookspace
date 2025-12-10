@@ -1578,4 +1578,1148 @@ router.delete('/users/:id',
 All concepts are implemented in the code you just built. Review:
 - `/services/gateway/` - API Gateway with all middleware
 - `/services/auth/` - Complete auth service
+- `/services/user/` - Prisma ORM with type-safe queries
 - Code comments explain the "why" behind every decision
+
+---
+
+## Phase 2 Extended: Prisma & ORM Questions
+
+## Q11: "ORM vs Raw SQL - When would you use each?"
+
+**Complete Answer:**
+
+ORM (Object-Relational Mapping) provides database abstraction, while raw SQL gives direct control.
+
+### ORM Advantages
+
+**1. Type Safety**
+```typescript
+// Prisma - Fully typed
+const user = await prisma.user.findUnique({
+  where: { email: 'john@example.com' }
+});
+// TypeScript knows: user.id, user.email, user.name
+
+// Raw SQL - No types
+const result = await db.query('SELECT * FROM users WHERE email = $1', ['john@example.com']);
+// TypeScript knows: result is any[]
+```
+
+**2. SQL Injection Prevention**
+```typescript
+// ❌ Raw SQL - Vulnerable
+const email = req.query.email;
+await db.query(`SELECT * FROM users WHERE email = '${email}'`);
+// Attacker: ?email=' OR '1'='1
+// Runs: SELECT * FROM users WHERE email = '' OR '1'='1'
+// Returns all users!
+
+// ✅ Prisma - Safe (parameterized)
+await prisma.user.findUnique({
+  where: { email: email } // Automatically escaped
+});
+```
+
+**3. Productivity**
+```typescript
+// Create user with Prisma
+const user = await prisma.user.create({
+  data: {
+    email: 'john@example.com',
+    name: 'John Doe',
+    role: 'USER'
+  }
+});
+
+// Same with raw SQL
+await db.query(`
+  INSERT INTO users (id, email, name, role, created_at, updated_at)
+  VALUES ($1, $2, $3, $4, NOW(), NOW())
+  RETURNING *
+`, [uuid(), 'john@example.com', 'John Doe', 'USER']);
+```
+
+**4. Database Portability**
+```typescript
+// Prisma - works with PostgreSQL, MySQL, SQLite
+datasource db {
+  provider = "postgresql" // Change to "mysql" - code still works!
+  url = env("DATABASE_URL")
+}
+
+// Raw SQL - database-specific
+// PostgreSQL: RETURNING *
+// MySQL: LAST_INSERT_ID()
+// Different syntax!
+```
+
+### Raw SQL Advantages
+
+**1. Complex Queries**
+```sql
+-- Complex analytics query
+SELECT 
+  u.name,
+  COUNT(DISTINCT d.id) as doc_count,
+  AVG(c.sentiment) as avg_sentiment,
+  ARRAY_AGG(DISTINCT d.tags) as all_tags
+FROM users u
+LEFT JOIN documents d ON d.created_by = u.id
+LEFT JOIN comments c ON c.user_id = u.id
+WHERE u.created_at > NOW() - INTERVAL '30 days'
+GROUP BY u.id, u.name
+HAVING COUNT(d.id) > 5
+ORDER BY doc_count DESC
+LIMIT 10;
+
+// Prisma - harder to express
+// Might need raw SQL anyway
+```
+
+**2. Performance Optimization**
+```sql
+-- Optimized query with specific indexes
+SELECT /*+ INDEX(users idx_email) */ *
+FROM users
+WHERE email = 'john@example.com'
+AND deleted_at IS NULL;
+
+-- ORM can't hint indexes
+```
+
+**3. Bulk Operations**
+```sql
+-- Bulk update (efficient)
+UPDATE users 
+SET role = 'PREMIUM'
+WHERE created_at < '2024-01-01' 
+  AND total_spent > 1000;
+
+-- Prisma prisma.user.updateMany() - same efficiency
+```
+
+### When to Use Each
+
+**Use ORM (Prisma) When:**
+- ✅ CRUD operations (90% of queries)
+- ✅ Type safety important
+- ✅ Team using TypeScript
+- ✅ Need database migration tools
+- ✅ Want productivity boost
+
+**Use Raw SQL When:**
+- ✅ Complex analytics queries
+- ✅ Performance-critical paths
+- ✅ Database-specific features
+- ✅ Bulk operations (millions of rows)
+- ✅ Existing SQL you're migrating
+
+**Hybrid Approach (Best Practice):**
+```typescript
+// Most queries: ORM
+const user = await prisma.user.findUnique({ where: { id } });
+
+// Complex queries: Raw SQL
+const analytics = await prisma.$queryRaw`
+  SELECT 
+    DATE_TRUNC('day', created_at) as date,
+    COUNT(*) as signups
+  FROM users
+  WHERE created_at > NOW() - INTERVAL '30 days'
+  GROUP BY date
+  ORDER BY date
+`;
+// Still type-safe with Prisma.TypedQuery!
+```
+
+**Interview Summary:**
+"ORMs like Prisma provide type safety, SQL injection prevention, and productivity for CRUD operations—covering 90% of use cases. Raw SQL is better for complex analytics, performance optimization, and database-specific features. The best approach is hybrid: use ORM for standard queries and raw SQL for complex cases. Prisma supports both, giving you type safety even with raw queries using `$queryRaw`."
+
+---
+
+## Q12: "Explain soft delete and when you'd use it"
+
+**Complete Answer:**
+
+Soft delete marks records as deleted instead of removing them from the database.
+
+### Hard Delete
+
+```sql
+-- Permanently removes data
+DELETE FROM users WHERE id = '123';
+
+-- Data gone forever
+SELECT * FROM users WHERE id = '123'; -- Returns nothing
+```
+
+**Consequences:**
+- ❌ Can't recover deleted data
+- ❌ Foreign key issues (orphaned references)
+- ❌ No audit trail
+- ❌ Violates some compliance requirements (GDPR right to be forgotten allows deletion, but need audit trail)
+
+### Soft Delete
+
+```sql
+-- Marks as deleted
+UPDATE users SET deleted_at = NOW() WHERE id = '123';
+
+-- Still in database
+SELECT * FROM users WHERE id = '123'; -- Still there
+
+-- Normal queries exclude it
+SELECT * FROM users WHERE deleted_at IS NULL; -- Real users only
+```
+
+**Benefits:**
+- ✅ Recoverable
+- ✅ Audit trail (who deleted when)
+- ✅ Foreign keys still valid
+- ✅ Can analyze deleted data
+- ✅ "Undo" functionality
+
+### Implementation with Prisma
+
+**Schema:**
+```prisma
+model User {
+  id        String    @id @default(uuid())
+  email     String    @unique
+  name      String
+  deletedAt DateTime? @map("deleted_at")  // null = active, date = deleted
+
+  @@index([deletedAt]) // Important for filtering
+}
+```
+
+**Middleware (Automatic Filtering):**
+```typescript
+// Prisma middleware auto-excludes soft-deleted records
+prisma.$use(async (params, next) => {
+  if (params.model === 'User') {
+    // findMany/findFirst auto-add: deletedAt: null
+    if (params.action === 'findMany' || params.action === 'findFirst') {
+      params.args.where = params.args.where || {};
+      params.args.where.deletedAt = null;
+    }
+
+    // Convert delete to soft delete
+    if (params.action === 'delete') {
+      params.action = 'update';
+      params.args.data = { deletedAt: new Date() };
+    }
+  }
+  return next(params);
+});
+
+// Now all queries are automatically safe!
+await prisma.user.findMany(); // WHERE deleted_at IS NULL (automatic!)
+await prisma.user.delete({ where: { id } }); // UPDATE users SET deleted_at = NOW()
+```
+
+**Restore Functionality:**
+```typescript
+// Restore deleted user
+async function restoreUser(userId: string) {
+  // Find deleted user (bypass middleware)
+  const user = await prisma.user.findFirst({
+    where: {
+      id: userId,
+      deletedAt: { not: null } // Specifically find deleted
+    }
+  });
+
+  if (!user) {
+    throw new Error('Deleted user not found');
+  }
+
+  // Restore (set deletedAt back to null)
+  return prisma.user.update({
+    where: { id: userId },
+    data: { deletedAt: null }
+  });
+}
+```
+
+### When to Use Soft Delete
+
+**Use Soft Delete:**
+1. **User accounts** - users want to "undo" deletion
+2. **Content** - posts, documents (moderation, recovery)
+3. **Orders** - compliance, audit requirements
+4. **Anything with relationships** - avoid orphaned foreign keys
+
+**Use Hard Delete:**
+1. **GDPR compliance** - "right to be forgotten" (after retention period)
+2. **Sensitive data** - security concerns
+3. **Large-scale cleanup** - disk space critical
+4. **Truly temporary data** - sessions, caches
+
+### Compliance Considerations
+
+**GDPR "Right to be Forgotten":**
+```typescript
+// Two-stage deletion
+// 1. Soft delete (immediate)
+await prisma.user.update({
+  where: { id },
+  data: {
+    deletedAt: new Date(),
+    // Optional: Anonymize PII
+    email: `deleted_${id}@example.com`,
+    name: 'Deleted User'
+  }
+});
+
+// 2. Hard delete after retention period (30 days)
+await prisma.user.deleteMany({
+  where: {
+    deletedAt: {
+      lt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+    }
+  }
+});
+```
+
+### Performance Considerations
+
+**Indexes are Critical:**
+```prisma
+model User {
+  deletedAt DateTime?
+
+  @@index([deletedAt]) // CRITICAL for WHERE deleted_at IS NULL
+}
+
+// Without index: Full table scan
+// With index: Index scan (100x faster)
+```
+
+**Partition deleted data** (advanced):
+```sql
+-- Separate tables for active/deleted
+CREATE TABLE users_active AS SELECT * FROM users WHERE deleted_at IS NULL;
+CREATE TABLE users_deleted AS SELECT * FROM users WHERE deleted_at IS NOT NULL;
+
+-- Queries only hit active table (smaller, faster)
+```
+
+**Interview Summary:**
+"Soft delete sets a `deletedAt` timestamp instead of removing records, enabling recovery, maintaining foreign key integrity, and providing audit trails. Implement with Prisma middleware to automatically filter deleted records and convert DELETEs to UPDATEs. Use for user accounts, content, and anything needing recovery. Use hard delete for GDPR compliance, sensitive data, or disk space constraints. Always index `deletedAt` for query performance."
+
+---
+
+## Q13: "What are database migrations and why are they important?"
+
+**Complete Answer:**
+
+**Database migrations** are versioned changes to your database schema, tracked in code.
+
+### The Problem Without Migrations
+
+**Scenario:** 3 developers, 1 database
+
+```typescript
+// Dev A (Monday): Adds 'role' column
+ALTER TABLE users ADD COLUMN role VARCHAR;
+
+// Dev B (Tuesday): Doesn't know about role column
+INSERT INTO users (email, name) VALUES (...); // ❌ Missing role!
+
+// Dev C (Wednesday): Renames 'name' to 'full_name'
+ALTER TABLE users RENAME COLUMN name TO full_name;
+
+// Dev A's code (Thursday):
+SELECT name FROM users; // ❌ Column doesn't exist!
+
+// Production: Total chaos
+```
+
+**Problems:**
+- ❌ No single source of truth
+- ❌ Can't reproduce schema
+- ❌ Can't rollback changes
+- ❌ Developers out of sync
+- ❌ Production deployments fragile
+
+### Migrations Solution
+
+**Version-controlled schema changes:**
+```
+prisma/migrations/
+├── 20241210_init/
+│   └── migration.sql
+├── 20241211_add_role/
+│   └── migration.sql
+├── 20241212_rename_name/
+│   └── migration.sql
+└── migration_lock.toml
+```
+
+**Each migration file:**
+```sql
+-- Migration: 20241211_add_role/migration.sql
+-- Created: 2024-12-11 10:30:00
+
+-- Add role column
+ALTER TABLE users ADD COLUMN role VARCHAR NOT NULL DEFAULT 'USER';
+
+-- Add index
+CREATE INDEX idx_users_role ON users(role);
+```
+
+### How Migrations Work
+
+**1. Development Flow:**
+```bash
+# 1. Update Prisma schema
+# prisma/schema.prisma
+model User {
+  id    String @id
+  email String
+  role  Role   @default(USER)  // ← Added
+}
+
+# 2. Generate migration
+npx prisma migrate dev --name add_role
+
+# Prisma:
+# - Compares schema to database
+# - Generates SQL migration file
+# - Applies migration to dev database
+# - Updates Prisma Client types
+```
+
+**2. Team Collaboration:**
+```bash
+# Dev B pulls Dev A's changes
+git pull
+
+# Run migrations to sync database
+npx prisma migrate dev
+
+# Now Dev B's database matches Dev A's
+```
+
+**3. Production Deployment:**
+```bash
+# CI/CD pipeline
+npx prisma migrate deploy
+
+# Runs all pending migrations
+# Atomic (all or nothing)
+# Records applied migrations in _prisma_migrations table
+```
+
+### Migration Table
+
+**Prisma tracks applied migrations:**
+```sql
+CREATE TABLE _prisma_migrations (
+  id                  VARCHAR PRIMARY KEY,
+  checksum            VARCHAR,
+  finished_at         TIMESTAMP,
+  migration_name      VARCHAR,
+  logs                TEXT,
+  rolled_back_at      TIMESTAMP,
+  started_at          TIMESTAMP,
+  applied_steps_count INTEGER
+);
+
+-- Example data:
+-- 20241210_init | finished | 2024-12-10 10:00:00
+-- 20241211_add_role | finished | 2024-12-11 15:30:00
+```
+
+**How it works:**
+```
+1. Read pending m igrations from disk
+2. Check _prisma_migrations table
+3. Apply only new migrations
+4. Record completion
+```
+
+### Benefits
+
+**1. Version Control**
+```bash
+git log prisma/migrations/
+
+# See schema history
+commit abc123: Add role column
+commit def456: Rename name to full_name
+commit ghi789: Add deleted_at for soft delete
+```
+
+**2. Reproducibility**
+```bash
+# Fresh database (dev, staging, prod)
+npx prisma migrate deploy
+
+# Applies ALL migrations in order
+# Exact same schema everywhere
+```
+
+**3. Collaboration**
+```bash
+# No conflicts
+Dev A: Adds migration 20241210_add_role
+Dev B: Adds migration 20241210_add_status
+
+# Both merge - both run
+# No duplicates (tracked by ID)
+```
+
+**4. Rollback** (careful!)
+```bash
+# Prisma doesn't have automatic rollback
+# But you can:
+
+# 1. Revert migration commit
+git revert abc123
+
+# 2. Create new migration that undoes changes
+npx prisma migrate dev --name revert_role
+
+# Migration SQL:
+ALTER TABLE users DROP COLUMN role;
+```
+
+### Migration Best Practices
+
+**1. Backward Compatible Changes**
+```sql
+-- ✅ Safe (backward compatible)
+ALTER TABLE users ADD COLUMN phone VARCHAR; -- New column (optional)
+CREATE INDEX idx_email ON users(email); -- New index
+
+-- ❌ Risky (breaking change)
+ALTER TABLE users DROP COLUMN email; -- App crashes if deployed before code
+ALTER TABLE users ALTER COLUMN name TYPE TEXT; -- Might truncate data
+```
+
+**2. Multi-Step Migrations** (for breaking changes)
+```sql
+-- Step 1: Add new column (deploy code + migration together)
+ALTER TABLE users ADD COLUMN full_name VARCHAR;
+UPDATE users SET full_name = name;
+
+-- Deploy code that writes to both name AND full_name
+
+-- Step 2: Wait a day, then drop old column
+ALTER TABLE users DROP COLUMN name;
+
+-- Deploy code that only uses full_name
+```
+
+**3. Data Migrations**
+```sql
+-- Schema migration + data migration
+ALTER TABLE users ADD COLUMN status VARCHAR DEFAULT 'active';
+
+-- Migrate existing data
+UPDATE users SET status = 'premium' WHERE subscription_id IS NOT NULL;
+UPDATE users SET status = 'inactive' WHERE last_login < NOW() - INTERVAL '1 year';
+```
+
+**4. Test Migrations**
+```bash
+# Test on dev database first
+npx prisma migrate dev
+
+# Then staging
+DATABASE_URL="staging" npx prisma migrate deploy
+
+# Then production (during maintenance window)
+DATABASE_URL="prod" npx prisma migrate deploy
+```
+
+### Common Interview Follow-Ups
+
+**Q: "What if a migration fails midway?"**
+```
+Depends on database:
+
+PostgreSQL: Uses transactions
+- Migration wrapped in BEGIN/COMMIT
+- If fails, rolls back automatically
+- Database unchanged
+
+MySQL (older): No DDL transactions
+- Migration partially applied
+- Database in corrupt state
+- Need manual fix
+
+Mitigation:
+- Test migrations in staging first
+- Have rollback plan
+- Backup before big changes
+```
+
+**Q: "How do you handle migration conflicts?"**
+```bash
+# Two developers create migrations simultaneously
+Dev A: 20241210_103000_add_role
+Dev B: 20241210_103001_add_status
+
+# Both merge to main
+# On production:
+npx prisma migrate deploy
+
+# Runs both in timestamp order
+# No conflict (separate migrations)
+
+# Real conflict:
+Dev A: Renames column 'name'
+Dev B: Adds index on column 'name'
+
+# Solution: Rebase and fix
+git rebase main
+# Resolve migration order
+# Test combined changes
+```
+
+**Interview Summary:**
+"Database migrations are version-controlled schema changes that ensure consistency across environments. Prisma generates migration files from schema changes, tracks applied migrations in a table, and applies pending migrations atomically. Benefits include reproducibility (same schema everywhere), collaboration (no conflicts), and audit trail (schema history in git). Best practices: backward-compatible changes, test in staging, multi-step for breaking changes, and combine schema + data migrations when needed."
+
+---
+
+## Q14: "Explain connection pooling and why it matters"
+
+**Complete Answer:**
+
+**Connection pooling** reuses database connections instead of creating new ones for each request.
+
+### The Problem Without Pooling
+
+**Naive approach:**
+```typescript
+// ❌ Create new connection per request
+app.get('/users', async (req, res) => {
+  const db = await createConnection(); // ← Expensive!
+  const users = await db.query('SELECT * FROM users');
+  await db.close();
+  res.json(users);
+});
+```
+
+**Cost of creating connection:**
+```
+1. TCP handshake (network round-trip)
+2. PostgreSQL authentication
+3. Session initialization
+4. Close connection
+Time: ~50-100ms per request!
+
+100 requests/sec = spend 5-10 seconds just connecting!
+```
+
+**Additional problems:**
+- Max connections limit (PostgreSQL default: 100)
+- Connection leak (forgot to close)
+- Resource exhaustion (too many open connections)
+
+### Connection Pool Solution
+
+**Pool maintains connections:**
+```
+Connection Pool (10 connections)
+┌─────────────────────┐
+│ [C1] [C2] [C3] ... │  Active (in use)
+│ [C4] [C5] [C6] ... │  Idle (available)
+└─────────────────────┘
+
+Request comes in:
+1. Borrow idle connection (instant)
+2. Use for query
+3. Return to pool
+4. Next request reuses it
+```
+
+**Implementation with Prisma:**
+```typescript
+// Single PrismaClient instance (has built-in pool)
+const prisma = new PrismaClient();
+
+app.get('/users', async (req, res) => {
+  // Reuses connection from pool
+  const users = await prisma.user.findMany();
+  res.json(users);
+  // Connection returned to pool automatically
+});
+```
+
+### Pool Configuration
+
+**Prisma connection string:**
+```bash
+DATABASE_URL="postgresql://user:pass@localhost:5432/db?connection_limit=10&pool_timeout=20"
+```
+
+**Parameters:**
+```
+connection_limit: Maximum connections in pool
+  - Default: (CPU cores * 2) + 1
+  - Formula from PostgreSQL best practice
+  - 4 cores = (4 * 2) + 1 = 9 connections
+
+pool_timeout: Wait time for available connection (seconds)
+  - Default: 10s
+  - Too low: Requests fail under load
+  - Too high: Users wait too long
+
+connect_timeout: Time to establish initial connection
+  - Default: 5s
+```
+
+### How to Size Your Pool
+
+**Formula:**
+```
+Pool size = ((core_count × 2) + effective_spindle_count)
+
+For typical web server:
+- 4 CPU cores
+- 1 disk (database on separate server, disk less relevant)
+- Pool size = (4 × 2) + 1 = 9 connections
+
+Why not more?
+- PostgreSQL context switching overhead
+- Memory per connection
+- Diminishing returns
+```
+
+**Load testing:**
+```javascript
+// Simulate load
+import autocannon from 'autocannon';
+
+autocannon({
+  url: 'http://localhost:3000/users',
+  connections: 100, // 100 concurrent requests
+  duration: 30 // 30 seconds
+});
+
+// Monitor Prisma pool metrics
+// - Active connections
+// - Wait time
+// - Query duration
+
+// Adjust pool size based on results
+```
+
+### Multiple Services Pooling
+
+**Problem:**
+```
+5 service instances (containers)
+Each has pool of 10 connections
+Total: 5 × 10 = 50 connections to database
+
+Database limit: 100 connections
+Only 50 connections left for:
+- Other services
+- Admin access
+- Background jobs
+```
+
+**Solution approaches:**
+
+**1. Connection broker (PgBouncer):**
+```
+┌─────────────┐
+│ Service 1   │───┐
+│ Service 2   │───┤
+│ Service 3   │───┼──→ PgBouncer ──→ PostgreSQL
+│ Service 4   │───┤    (Connection    (100 conns)
+│ Service 5   │───┘     pooler)
+└─────────────┘
+  (Each thinks       (Maintains
+   it has 10          pool of 20
+   connections)       real connections)
+```
+
+**2. Smaller pools per service:**
+```
+Database limit: 100
+Services: 5
+Admin: 5
+Jobs: 5
+Reserve: 10
+
+Per service: (100 - 20) / 5 = 16 connections
+```
+
+**3. Serverless (Prisma Data Proxy):**
+```
+AWS Lambda (1000 instances) → Prisma Data Proxy → PostgreSQL
+  Each has 1 connection        Pools connections    100 connections
+
+Without proxy: 1000 connections needed (impossible!)
+With proxy: 100 connections (proxy handles pooling)
+```
+
+### Monitoring Pool Health
+
+**Metrics to track:**
+```typescript
+// Prisma Client extensions (future feature)
+const prisma = new PrismaClient().$extends({
+  query: {
+    async $allOperations({ operation, model, args, query }) {
+      const start = Date.now();
+      const result = await query(args);
+      const duration = Date.now() - start;
+
+      // Log slow queries
+      if (duration > 1000) {
+        console.warn(`Slow query: ${model}.${operation} took ${duration}ms`);
+      }
+
+      return result;
+    },
+  },
+});
+```
+
+**Database monitoring:**
+```sql
+-- Active connections
+SELECT count(*) FROM pg_stat_activity;
+
+-- By database
+SELECT datname, count(*) 
+FROM pg_stat_activity 
+GROUP BY datname;
+
+-- Idle connections
+SELECT count(*) 
+FROM pg_stat_activity 
+WHERE state = 'idle';
+
+-- Long-running queries
+SELECT pid, now() - query_start AS duration, query
+FROM pg_stat_activity
+WHERE state != 'idle'
+ORDER BY duration DESC;
+```
+
+### Common Pitfalls
+
+**1. Creating multiple PrismaClient instances:**
+```typescript
+// ❌ Bad - each creates its own pool
+app.get('/users', async (req, res) => {
+  const prisma = new PrismaClient(); // New pool!
+  const users = await prisma.user.findMany();
+  res.json(users);
+});
+
+// 100 requests = 100 pools = 1000 connections!
+```
+
+**2. Not handling connection errors:**
+```typescript
+// ❌ Bad
+try {
+  await prisma.user.findMany();
+} catch (error) {
+  // Connection still held!
+}
+
+// ✅ Good - Prisma handles this automatically
+// Connection returned to pool even on error
+```
+
+**3. Pool exhaustion:**
+```typescript
+// Symptom: "Timed out fetching a new connection from the pool"
+
+// Causes:
+// - Long-running transactions holding connections
+// - Pool too small for load
+// - Connection leaks
+// - Slow queries
+
+// Fix:
+// - Increase pool size
+// - Optimize queries
+// - Use connection timeouts
+// - Monitor active connections
+```
+
+**Interview Summary:**
+"Connection pooling reuses database connections instead of creating new ones (which costs ~50-100ms). Prisma has built-in pooling with default size `(CPU cores × 2) + 1`. Benefits include faster response times (no connection overhead), resource efficiency (limit max connections), and automatic lifecycle management. Critical for production: use singleton PrismaClient, size pool based on load testing not guesses, monitor active connections, and consider PgBouncer for multiple service instances or serverless deployments."
+
+---
+
+## Q15: "How do you prevent the N+1 query problem with Prisma?"
+
+**Complete Answer:**
+
+The **N+1 problem** happens when you make 1 query to get N items, then N additional queries to get related data.
+
+### The Problem
+
+**Scenario:** Get users and their document counts
+
+```typescript
+// ❌ N+1 Problem
+async function getUsers Bad() {
+  // Query 1: Get all users
+  const users = await prisma.user.findMany(); // → SELECT * FROM users
+
+  // Query N: Get each user's documents
+  for (const user of users) {
+    user.docCount = await prisma.document.count({
+      where: { createdBy: user.id }
+    });
+    // → SELECT COUNT(*) FROM documents WHERE created_by = 'user1'
+    // → SELECT COUNT(*) FROM documents WHERE created_by = 'user2'
+    // → SELECT COUNT(*) FROM documents WHERE created_by = 'user3'
+    // ... (N more queries!)
+  }
+
+  return users;
+}
+
+// 10 users = 1 + 10 = 11 queries
+// 100 users = 1 + 100 = 101 queries
+// 1000 users = 1001 queries! 🔥
+```
+
+**Performance:**
+```
+Each query: ~5ms
+100 users: 101 queries × 5ms = 505ms
+vs
+Single query: ~1ms
+
+505x slower!
+```
+
+### Solution 1: Include (Eager Loading)
+
+**Join related data in single query:**
+```typescript
+// ✅ Good - 1 query with JOIN
+const users = await prisma.user.findMany({
+  include: {
+    documents: true // Loads all documents per user
+  }
+});
+// →  SELECT * FROM users
+//   LEFT JOIN documents ON documents.created_by = users.id
+
+// Access documents
+users[0].documents.forEach(doc => {
+  console.log(doc.title);
+});
+
+// 1 query total!
+```
+
+**Selective include:**
+```typescript
+// Include but select specific fields
+const users = await prisma.user.findMany({
+  include: {
+    documents: {
+      select: {
+        id: true,
+        title: true,
+        createdAt: true
+        // Don't load content (large field)
+      }
+    }
+  }
+});
+```
+
+### Solution 2: Aggregations
+
+**Count without loading all data:**
+```typescript
+// ❌ Bad - loads all documents just to count
+const users = await prisma.user.findMany({
+  include: {
+    documents: true
+  }
+});
+users.forEach(user => {
+  user.docCount = user.documents.length; // Wasteful!
+});
+
+// ✅ Good - count in database
+const users = await prisma.user.findMany({
+  include: {
+    _count: {
+      select: {
+        documents: true // COUNT(documents.id)
+      }
+    }
+  }
+});
+
+users.forEach(user => {
+  console.log(user._count.documents); // Just the count
+});
+
+// Generates:
+// SELECT users.*, COUNT(documents.id) as documents_count
+// FROM users
+// LEFT JOIN documents ON documents.created_by = users.id
+// GROUP BY users.id
+```
+
+### Solution 3: Batch Loading (DataLoader Pattern)
+
+**For complex scenarios:**
+```typescript
+import DataLoader from 'dataloader';
+
+// Batch load documents
+const documentLoader = new DataLoader(async (userIds: string[]) => {
+  // Single query for all users
+  const documents = await prisma.document.groupBy({
+    by: ['createdBy'],
+    where: {
+      createdBy: { in: userIds }
+    },
+    _count: true
+  });
+
+  // Return in same order as userIds
+  return userIds.map(id =>
+    documents.find(d => d.createdBy === id)?._count || 0
+  );
+});
+
+// Usage
+const users = await prisma.user.findMany();
+const usersWithCounts = await Promise.all(
+  users.map(async user => ({
+    ...user,
+    docCount: await documentLoader.load(user.id)
+  }))
+);
+
+// Still 2 queries total (not N+1)
+```
+
+### Solution 4: Denormalization
+
+**Store computed values:**
+```prisma
+model User {
+  id       String @id
+  email    String
+  
+  // Denormalized count (updated on document create/delete)
+  docCount Int    @default(0)
+
+  documents Document[]
+}
+```
+
+```typescript
+// Update count when document created
+await prisma.$transaction([
+  prisma.document.create({ data: { ... } }),
+  prisma.user.update({
+    where: { id: userId },
+    data: { docCount: { increment: 1 } }
+  })
+]);
+
+// Now just query users (no JOIN needed)
+const users = await prisma.user.findMany(); // Has docCount already!
+```
+
+### Real-World Example: Nested Relations
+
+**Scenario:** Users → Documents → Comments
+
+```typescript
+// ❌ Terrible - N+1+N problem
+const users = await prisma.user.findMany(); // 1 query
+
+for (const user of users) {
+  user.documents = await prisma.document.findMany({
+    where: { createdBy: user.id }
+  }); // N queries
+
+  for (const doc of user.documents) {
+    doc.comments = await prisma.comment.findMany({
+      where: { docId: doc.id }
+    }); // N more queries
+  }
+}
+// 10 users with 5 docs each = 1 + 10 + 50 = 61 queries!
+
+// ✅ Good - 1 query with nested include
+const users = await prisma.user.findMany({
+  include: {
+    documents: {
+      include: {
+        comments: true
+      }
+    }
+  }
+});
+// 1 query with nested JOINs!
+```
+
+### How to Detect N+1
+
+**1. Prisma logging:**
+```typescript
+const prisma = new PrismaClient({
+  log: ['query'] // Log all SQL queries
+});
+
+// Check logs for repeated patterns:
+// SELECT * FROM documents WHERE created_by = 'user1'
+// SELECT * FROM documents WHERE created_by  = 'user2'  // ← Red flag!
+// SELECT * FROM documents WHERE created_by = 'user3'
+```
+
+**2. APM tools:**
+```
+- New Relic
+- DataDog
+- Sentry
+
+Look for:
+- High query counts per request
+- Multiple identical query patterns
+- Linear scaling (N users = N queries)
+```
+
+**3. Database query log:**
+```sql
+-- PostgreSQL slow query log
+SELECT query, calls
+FROM pg_stat_statements
+WHERE calls > 100 -- Many repeated queries
+ORDER BY calls DESC;
+```
+
+### Interview Summary:**
+"The N+1 problem occurs when fetching N items requires N+1 queries (1 for items, N for related data). Prevent with Prisma's `include` for eager loading (single JOIN query), `_count` for aggregations, DataLoader for batching, or denormalization for frequently accessed counts. Always use `include` for relational data instead of separate queries. Detect N+1 using Prisma query logging, APM tools, or database slow query logs."
+
+---
+
+**🎉 Phase 2 Fully Complete with Prisma Mastery!**
+
+You now understand:
+- ✅ ORM vs Raw SQL trade-offs
+- ✅ Soft delete implementation
+- ✅ Database migrations
+- ✅ Connection pooling
+- ✅ N+1 query prevention
+
+All concepts implemented in `/services/user/` 🚀
+
