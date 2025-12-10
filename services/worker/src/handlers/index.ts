@@ -3,6 +3,7 @@ import { handleDocumentCreated } from './document-created.handler';
 import { handleCommentAdded } from './comment-added.handler';
 import { handleUserRegistered } from './user-registered.handler';
 import { handleFileUploaded } from './file-uploaded.handler';
+import { handleDocumentIndexing } from './document-indexing.handler';
 
 /**
  * Event Handler Registry
@@ -18,6 +19,13 @@ export async function handleEvent(event: Event): Promise<void> {
   switch (event.type) {
     case EventType.DOCUMENT_CREATED:
       await handleDocumentCreated(event);
+      // Also index in Elasticsearch
+      await handleDocumentIndexing(event);
+      break;
+
+    case EventType.DOCUMENT_UPDATED:
+      // Index updated document in Elasticsearch
+      await handleDocumentIndexing(event);
       break;
 
     case EventType.COMMENT_ADDED:
@@ -37,3 +45,4 @@ export async function handleEvent(event: Event): Promise<void> {
       console.warn(`Unknown event type: ${(event as Event).type}`);
   }
 }
+
