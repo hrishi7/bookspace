@@ -36,7 +36,15 @@ export interface IDocument extends MongooseDocument {
   createdBy: string; // userId
   createdAt: Date;
   updatedAt: Date;
+  
+  // Instance methods
+  addVersion(content: string, userId: string): void;
+  getVersion(version: number): IDocumentVersion | undefined;
+  
+  // Virtual properties
+  currentVersion: number;
 }
+
 
 /**
  * Document Version Schema

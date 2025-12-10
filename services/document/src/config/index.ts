@@ -1,5 +1,4 @@
 import dotenv from 'dotenv';
-import { getRequiredEnv } from '@bookspace/common';
 
 dotenv.config();
 
