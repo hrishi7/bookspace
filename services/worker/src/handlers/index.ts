@@ -2,6 +2,7 @@ import { Event, EventType } from '@bookspace/common';
 import { handleDocumentCreated } from './document-created.handler';
 import { handleCommentAdded } from './comment-added.handler';
 import { handleUserRegistered } from './user-registered.handler';
+import { handleFileUploaded } from './file-uploaded.handler';
 
 /**
  * Event Handler Registry
@@ -25,6 +26,10 @@ export async function handleEvent(event: Event): Promise<void> {
 
     case EventType.USER_REGISTERED:
       await handleUserRegistered(event);
+      break;
+
+    case EventType.FILE_UPLOADED:
+      await handleFileUploaded(event);
       break;
 
     default:

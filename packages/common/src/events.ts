@@ -29,6 +29,9 @@ export enum EventType {
   USER_REGISTERED = 'user.registered',
   USER_UPDATED = 'user.updated',
   USER_DELETED = 'user.deleted',
+  
+  // File events
+  FILE_UPLOADED = 'file.uploaded',
 }
 
 /**
@@ -98,6 +101,22 @@ export interface UserRegisteredEvent extends BaseEvent {
 }
 
 /**
+ * File Events
+ */
+export interface FileUploadedEvent extends BaseEvent {
+  type: EventType.FILE_UPLOADED;
+  data: {
+    fileId: string;
+    fileName: string;
+    fileSize: number;
+    mimeType: string;
+    s3Key: string;
+    uploadedBy: string;
+    isImage: boolean;
+  };
+}
+
+/**
  * Union type of all events
  */
 export type Event =
@@ -105,4 +124,5 @@ export type Event =
   | DocumentUpdatedEvent
   | DocumentDeletedEvent
   | CommentAddedEvent
-  | UserRegisteredEvent;
+  | UserRegisteredEvent
+  | FileUploadedEvent;
