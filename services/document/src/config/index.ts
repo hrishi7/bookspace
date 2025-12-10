@@ -16,8 +16,12 @@ export const config = {
   },
 
   cache: {
-    ttl: parseInt(process.env.CACHE_TTL_SECONDS || '300', 10), // 5 minutes
-    enabled: process.env.CACHE_ENABLED !== 'false',
+    enabled: process.env.CACHE_ENABLED === 'true',
+    ttl: parseInt(process.env.CACHE_TTL || '3600', 10),
+  },
+
+  rabbitmq: {
+    url: process.env.RABBITMQ_URL || 'amqp://localhost:5672',
   },
 
   log: {

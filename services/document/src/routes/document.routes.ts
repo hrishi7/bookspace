@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { NotFoundError, BadRequestError } from '@bookspace/common';
+import { NotFoundError, BadRequestError, EventType, DocumentCreatedEvent, DocumentUpdatedEvent, getMessageBroker } from '@bookspace/common';
 import { createPaginatedResponse } from '@bookspace/common';
 import { DocumentModel } from '../models/document.model';
 import { CommentModel } from '../models/comment.model';
@@ -118,7 +118,25 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
 
     req.log.info({ docId: document._id, userId }, 'Document created');
 
-    // TODO: Publish doc.created event to RabbitMQ
+    // Publish document.created event
+    try {
+      const broker = getMessageBroker();
+      const event: DocumentCreatedEvent = {
+        type: EventType.DOCUMENT_CREATED,
+        timestamp: new Date().toISOString(),
+        data: {
+          documentId: document._id.toString(),
+          title: document.title,
+          createdBy: userId,
+          tags: document.tags,
+        },
+      };
+      await broker.publish(event);
+      req.log.info({ docId: document._id }, 'document.created event published');
+    } catch (error) {
+      //  Don't fail request if event publishing fails
+      req.log.error({ error }, 'Failed to publish document.created event');
+    }
 
     res.status(201).json({
       success: true,
@@ -237,7 +255,24 @@ router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
 
     req.log.info({ docId: id, userId, version: document.currentVersion }, 'Document updated');
 
-    // TODO: Publish doc.updated event
+    // Publish document.updated event
+    try {
+      const broker = getMessageBroker();
+      const event: DocumentUpdatedEvent = {
+        type: EventType.DOCUMENT_UPDATED,
+        timestamp: new Date().toISOString(),
+        data: {
+          documentId: id,
+          title: document.title,
+          updatedBy: userId,
+          version: document.currentVersion,
+        },
+      };      await broker.publish(event);
+      req.log.info({ docId: id }, 'document.updated event published');
+    } catch (error) {
+      // Don't fail request event publishing fails
+      req.log.error({ error }, 'Failed to publish document.updated event');
+    }
 
     res.json({
       success: true,

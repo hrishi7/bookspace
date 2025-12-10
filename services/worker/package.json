@@ -1,0 +1,24 @@
+{
+  "name": "@bookspace/worker",
+  "version": "1.0.0",
+  "description": "Worker service - Process async jobs from message queue",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@bookspace/logger": "^1.0.0",
+    "@bookspace/common": "^1.0.0",
+    "@bookspace/types": "^1.0.0",
+    "dotenv": "^16.3.1",
+    "amqplib": "^0.10.3"
+  },
+  "devDependencies": {
+    "@types/amqplib": "^0.10.4",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.2"
+  }
+}

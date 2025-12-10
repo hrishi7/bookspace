@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import { createLogger } from '@bookspace/logger';
-import { AppError } from '@bookspace/common';
+import { AppError, getMessageBroker } from '@bookspace/common';
 import { config } from './config';
 import { connectMongoDB, disconnectMongoDB } from './config/mongodb';
 import documentRoutes from './routes/document.routes';
@@ -81,6 +81,16 @@ async function start() {
     // Connect to MongoDB
     await connectMongoDB();
 
+    // Connect to RabbitMQ
+    try {
+      const broker = getMessageBroker(config.rabbitmq.url);
+      await broker.connect();
+      logger.info('Connected to RabbitMQ');
+    } catch (error) {
+      logger.warn({ error }, 'RabbitMQ connection failed - events will not be published');
+      // Don't fail startup if RabbitMQ is unavailable
+    }
+
     // Start HTTP server
     const server = app.listen(config.port, () => {
       logger.info({ port: config.port }, 'Document service started');
@@ -93,6 +103,15 @@ async function start() {
       server.close(async () => {
         try {
           await disconnectMongoDB();
+          
+          // Disconnect RabbitMQ
+          try {
+            const broker = getMessageBroker();
+            await broker.disconnect();
+          } catch (error) {
+            // Ignore if broker not initialized
+          }
+
           logger.info('Shutdown complete');
           process.exit(0);
         } catch (error) {

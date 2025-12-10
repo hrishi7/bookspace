@@ -65,7 +65,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # Prometheus for metrics
+  # Prometheus - Metrics Collection
   prometheus:
     image: prom/prometheus:latest
     container_name: bookspace-prometheus
@@ -94,7 +94,7 @@ services:
 
 volumes:
   postgres_data:
-  mongo_data:
+  mongodb_data:
   redis_data:
   rabbitmq_data:
   prometheus_data:
