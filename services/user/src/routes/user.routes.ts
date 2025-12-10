@@ -129,6 +129,7 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
         role: true,
         createdAt: true,
         updatedAt: true,
+        deletedAt: true,
       },
     });
 
@@ -156,7 +157,16 @@ router.get('/email/:email', async (req: Request, res: Response, next: NextFuncti
 
     const user = await prisma.user.findUnique({
       where: { email },
-      // Include password for login verification
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        password: true,
+        createdAt: true,
+        updatedAt: true,
+        deletedAt: true,
+      },
     });
 
     if (!user || user.deletedAt) {

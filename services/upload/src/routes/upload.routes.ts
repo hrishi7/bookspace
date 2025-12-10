@@ -2,13 +2,12 @@ import { Router, Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import multerS3 from 'multer-s3';
 import { v4 as uuidv4 } from 'uuid';
-import { PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { BadRequestError, NotFoundError, getMessageBroker } from '@bookspace/common';
+import { BadRequestError, NotFoundError, getMessageBroker, FileUploadedEvent, EventType } from '@bookspace/common';
 import { s3Client, S3_BUCKET } from '../config/s3';
 import { config } from '../config';
-import { validateFileType, validateFileSize, isImageFile, getFileExtension } from '../validators/upload.validator';
-import { FileUploadedEvent } from '../types/events';
+import { validateFileType, isImageFile, getFileExtension } from '../validators/upload.validator';
 
 const router = Router();
 
@@ -34,13 +33,13 @@ const upload = multer({
   storage: multerS3({
     s3: s3Client,
     bucket: S3_BUCKET,
-    metadata: (req, file, cb) => {
+    metadata: (req: Request, file, cb) => {
       cb(null, {
         uploadedBy: req.headers['x-user-id'] as string || 'unknown',
         originalName: file.originalname,
       });
     },
-    key: (req, file, cb) => {
+    key: (req: Request, file, cb) => {
       // Generate unique S3 key: uploads/{userId}/{uuid}-{filename}
       const userId = req.headers['x-user-id'] as string || 'unknown';
       const fileId = uuidv4();
@@ -52,7 +51,7 @@ const upload = multer({
   limits: {
     fileSize: config.upload.maxFileSizeBytes,
   },
-  fileFilter: (req, file, cb) => {
+  fileFilter: (req: Request, file, cb) => {
     // Validate MIME type
     if (!validateFileType(file.mimetype)) {
       return cb(new BadRequestError(`File type ${file.mimetype} not allowed`));
@@ -108,7 +107,7 @@ router.post('/', upload.single('file'), async (req: Request, res: Response, next
       try {
         const broker = getMessageBroker();
         const event: FileUploadedEvent = {
-          type: 'file.uploaded' as any,
+          type: EventType.FILE_UPLOADED,
           timestamp: new Date().toISOString(),
           data: {
             fileId,
@@ -120,7 +119,7 @@ router.post('/', upload.single('file'), async (req: Request, res: Response, next
             isImage: true,
           },
         };
-        await broker.publish(event as any);
+        await broker.publish(event);
         req.log.info({ fileId }, 'file.uploaded event published');
       } catch (error) {
         req.log.error({ error }, 'Failed to publish file.uploaded event');

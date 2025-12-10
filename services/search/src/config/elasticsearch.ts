@@ -53,7 +53,7 @@ export async function initializeIndex(): Promise<void> {
         body: {
           settings: {
             number_of_shards: 1,
-            number_of replicas: 0,
+            number_of_replicas: 0,
             analysis: {
               analyzer: {
                 // Custom analyzer for better search

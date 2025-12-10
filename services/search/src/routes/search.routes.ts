@@ -54,7 +54,11 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
     } = searchQuerySchema.parse(req.query);
 
     // Build Elasticsearch query
-    const must: any[] = [
+    const must: Array<{
+      multi_match?: any;
+      terms?: any;
+      term?: any;
+    }> = [
       {
         multi_match: {
           query: q,
@@ -85,7 +89,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
     }
 
     // Sorting
-    let sort: any[] = [];
+    let sort: Array<{ [key: string]: string }> = [];
     if (sortBy === 'date') {
       sort = [{ createdAt: 'desc' }];
     } else if (sortBy === 'title') {
@@ -148,12 +152,12 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
         results: result.hits.hits.map((hit: any) => ({
           documentId: hit._id,
           score: hit._score,
-          ...hit._source,
+          ...(hit._source as object),
           highlights: hit.highlight,
         })),
         facets: {
-          tags: result.aggregations?.top_tags.buckets || [],
-          authors: result.aggregations?.authors.buckets || [],
+          tags: (result.aggregations?.top_tags as { buckets: unknown[] })?.buckets || [],
+          authors: (result.aggregations?.authors as { buckets: unknown[] })?.buckets || [],
         },
         took: result.took, // milliseconds
       },
@@ -201,11 +205,14 @@ router.get('/suggest', async (req: Request, res: Response, next: NextFunction) =
       },
     });
 
-    const suggestions = result.suggest?.title_suggest[0].options.map((opt: any) => ({
-      text: opt.text,
-      score: opt._score,
-      documentId: opt._id,
-    })) || [];
+    const options = result.suggest?.title_suggest?.[0]?.options;
+    const suggestions = Array.isArray(options)
+      ? options.map((opt: any) => ({
+          text: opt.text,
+          score: opt._score,
+          documentId: opt._id,
+        }))
+      : [];
 
     req.log.info({ query: q, count: suggestions.length }, 'Suggestions generated');
 
@@ -266,8 +273,8 @@ router.get('/analytics', async (req: Request, res: Response, next: NextFunction)
     res.json({
       success: true,
       data: {
-        popularTerms: result.aggregations?.popular_terms.buckets || [],
-        popularTags: result.aggregations?.popular_tags.buckets || [],
+        popularTerms: (result.aggregations?.popular_terms as { buckets: unknown[] })?.buckets || [],
+        popularTags: (result.aggregations?.popular_tags as { buckets: unknown[] })?.buckets || [],
       },
     });
   } catch (error) {

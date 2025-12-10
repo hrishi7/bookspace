@@ -34,17 +34,18 @@ export async function handleDocumentIndexing(
 
   try {
     // Index document into Elasticsearch
+    const createdEvent = event.type === 'document.created' ? (event as DocumentCreatedEvent) : null;
+    const updatedEvent = event.type === 'document.updated' ? (event as DocumentUpdatedEvent) : null;
+
     await esClient.index({
       index: INDEX_NAME,
       id: event.data.documentId,
       document: {
         documentId: event.data.documentId,
         title: event.data.title,
-        content: event.type === 'document.created' 
-          ? (event.data as any).content 
-          : undefined,
-        tags: event.data.tags || [],
-        createdBy: event.data.createdBy || event.data.updatedBy,
+        content: createdEvent ? undefined : undefined, // content not available in event
+        tags: createdEvent ? createdEvent.data.tags : [],
+        createdBy: createdEvent ? createdEvent.data.createdBy : updatedEvent!.data.updatedBy,
         createdAt: new Date(),
         updatedAt: new Date(),
       },
