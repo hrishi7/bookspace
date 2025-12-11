@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { NotFoundError, ConflictError, UnauthorizedError, BadRequestError } from '@bookspace/common';
+import { NotFoundError, ConflictError, UnauthorizedError } from '@bookspace/common';
 import { prisma } from '../config/database';
 import {
   createUserSchema,

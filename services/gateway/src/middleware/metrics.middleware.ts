@@ -94,7 +94,7 @@ export const metricsMiddleware = (req: Request, res: Response, next: NextFunctio
  * 
  * Prometheus scrapes this endpoint to collect metrics
  */
-export const metricsHandler = async (req: Request, res: Response) => {
+export const metricsHandler = async (_req: Request, res: Response) => {
   res.set('Content-Type', register.contentType);
   res.end(await register.metrics());
 };

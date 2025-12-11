@@ -15,10 +15,27 @@ import { config } from '../config';
 const redisClient = new Redis(config.redis.url, {
   enableOfflineQueue: false,
   maxRetriesPerRequest: 3,
+  lazyConnect: true, // Don't connect immediately
+});
+
+let redisAvailable = false;
+
+// Try to connect to Redis
+redisClient.connect().then(() => {
+  console.log('[Gateway] Redis connected for rate limiting');
+  redisAvailable = true;
+}).catch((err) => {
+  console.warn('[Gateway] Redis unavailable for rate limiting, using memory store:', err.message);
+  redisAvailable = false;
 });
 
 redisClient.on('error', (err) => {
-  console.error('Redis rate limit error:', err);
+  console.error('[Gateway] Redis error:', err.message);
+  redisAvailable = false;
+});
+
+redisClient.on('connect', () => {
+  redisAvailable = true;
 });
 
 /**
@@ -47,29 +64,23 @@ redisClient.on('error', (err) => {
  *    - Good for: Strict rate limits
  */
 export const createRateLimiter = () => {
+  // Using memory store for now - for production with multiple instances, use Redis
   return rateLimit({
     windowMs: config.rateLimit.windowMs, // 15 minutes
     max: config.rateLimit.maxRequests, // 100 requests per window
     
-    // Use Redis for distributed rate limiting
-    store: new RedisStore({
-      // @ts-expect-error - version mismatch in types
-      client: redisClient,
-      prefix: 'rl:', // Rate limit key prefix
-    }),
-
     // Standardize headers
     standardHeaders: true, // Return rate limit info in headers
     legacyHeaders: false, // Disable X-RateLimit-* headers
 
     // Key generator - rate limit by IP
-    keyGenerator: (req) => {
+    keyGenerator: (req: any) => {
       // In production, use req.user.id for authenticated users
       return req.ip || 'unknown';
     },
 
     // Custom error handler
-    handler: (req, res) => {
+    handler: (_req: any, res: any) => {
       res.status(429).json({
         success: false,
         error: {
@@ -80,7 +91,7 @@ export const createRateLimiter = () => {
     },
 
     // Skip rate limiting for certain conditions
-    skip: (req) => {
+    skip: (req: any) => {
       // Don't rate limit health checks
       return req.path === '/health';
     },
@@ -97,19 +108,13 @@ export const createAuthRateLimiter = () => {
   return rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 5, // Only 5 attempts per window
-    
-    store: new RedisStore({
-      // @ts-expect-error - version mismatch
-      client: redisClient,
-      prefix: 'rl:auth:',
-    }),
 
-    keyGenerator: (req) => {
+    keyGenerator: (req: any) => {
       // Rate limit by IP for auth requests
       return `auth:${req.ip}`;
     },
 
-    handler: (req, res) => {
+    handler: (_req: any, res: any) => {
       res.status(429).json({
         success: false,
         error: {

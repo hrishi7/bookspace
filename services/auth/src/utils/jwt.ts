@@ -33,15 +33,16 @@ import { storeRefreshToken, blacklistToken } from './redis';
  * Generate access token (short-lived)
  */
 export function generateAccessToken(userId: string, email: string, role: UserRole): string {
-  const payload: TokenPayload = {
+  const payload: Omit<TokenPayload, 'exp' | 'iat' | 'iss' | 'aud'> = {
     userId,
     email,
     role,
     type: 'access',
   };
 
+  // @ts-ignore - JWT library type issue with expiresIn
   return jwt.sign(payload, config.jwt.accessSecret, {
-    expiresIn: config.jwt.accessExpiresIn,
+    expiresIn: config.jwt.accessExpiresIn as string | number,
     issuer: 'bookspace-auth',
     audience: 'bookspace-api',
   });
@@ -51,15 +52,16 @@ export function generateAccessToken(userId: string, email: string, role: UserRol
  * Generate refresh token (long-lived)
  */
 export function generateRefreshToken(userId: string, email: string, role: UserRole): string {
-  const payload: TokenPayload = {
+  const payload: Omit<TokenPayload, 'exp' | 'iat' | 'iss' | 'aud'> = {
     userId,
     email,
     role,
     type: 'refresh',
   };
 
+  // @ts-ignore - JWT library type issue with expiresIn
   return jwt.sign(payload, config.jwt.refreshSecret, {
-    expiresIn: config.jwt.refreshExpiresIn,
+    expiresIn: config.jwt.refreshExpiresIn as string | number,
     issuer: 'bookspace-auth',
     audience: 'bookspace-api',
   });

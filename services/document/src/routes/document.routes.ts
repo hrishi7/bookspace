@@ -7,14 +7,11 @@ import {
   createDocumentSchema,
   updateDocumentSchema,
   searchDocumentsSchema,
-  addCommentSchema,
 } from '../validators/document.validator';
 import {
   getCachedDocument,
   cacheDocument,
   invalidateDocumentCache,
-  getCachedComments,
-  cacheComments,
   invalidateCommentsCache,
 } from '../config/redis';
 
@@ -191,13 +188,13 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
 
     req.log.info({ docId: id }, 'Document retrieved from database');
 
-    res.json({
+    return res.json({
       success: true,
       data: document,
       cached: false,
     });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 

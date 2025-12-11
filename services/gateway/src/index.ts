@@ -75,7 +75,7 @@ app.use(createRateLimiter());
  * Health Check Endpoint
  * Used by load balancers and Kubernetes
  */
-app.get('/health', (req, res) => {
+app.get('/health', (_req, res) => {
   res.json({
     status: 'healthy',
     service: 'api-gateway',

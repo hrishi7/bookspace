@@ -51,7 +51,7 @@ const upload = multer({
   limits: {
     fileSize: config.upload.maxFileSizeBytes,
   },
-  fileFilter: (req: Request, file, cb) => {
+  fileFilter: (_req: Request, file, cb) => {
     // Validate MIME type
     if (!validateFileType(file.mimetype)) {
       return cb(new BadRequestError(`File type ${file.mimetype} not allowed`));

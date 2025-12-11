@@ -23,7 +23,7 @@ declare global {
  * 
  * Interview Topic: JWT Authentication Pattern
  */
-export const authenticate = (req: Request, res: Response, next: NextFunction) => {
+export const authenticate = (req: Request, _res: Response, next: NextFunction) => {
   try {
     // Extract token from Authorization header
     const authHeader = req.headers.authorization;
@@ -61,7 +61,7 @@ export const authenticate = (req: Request, res: Response, next: NextFunction) =>
  * Attaches user if token is valid, but doesn't fail if missing
  * Useful for endpoints that work for both authenticated and anonymous users
  */
-export const optionalAuth = (req: Request, res: Response, next: NextFunction) => {
+export const optionalAuth = (req: Request, _res: Response, next: NextFunction) => {
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -92,7 +92,7 @@ export const optionalAuth = (req: Request, res: Response, next: NextFunction) =>
  * - Authorization: "What can you do?" (RBAC checks permissions)
  */
 export const requireRole = (...roles: UserRole[]) => {
-  return (req: Request, res: Response, next: NextFunction) => {
+  return (req: Request, _res: Response, next: NextFunction) => {
     if (!req.user) {
       return next(new UnauthorizedError('Authentication required'));
     }

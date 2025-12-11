@@ -1,6 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
-import { BadRequestError } from '@bookspace/common';
 import { esClient } from '../config/elasticsearch';
 import { config } from '../config';
 
@@ -247,7 +246,7 @@ router.get('/suggest', async (req: Request, res: Response, next: NextFunction) =
  * - Zero-result queries
  * - Query refinements
  */
-router.get('/analytics', async (req: Request, res: Response, next: NextFunction) => {
+router.get('/analytics', async (_: Request, res: Response, next: NextFunction) => {
   try {
     // Get top search terms from Elasticsearch index
     // In production, you'd have a separate analytics index

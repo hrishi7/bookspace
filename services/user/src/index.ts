@@ -23,7 +23,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Request logging
-app.use((req, res, next) => {
+app.use((req, _res, next) => {
   req.log = logger.child({
     requestId: req.headers['x-request-id'],
     method: req.method,
@@ -34,7 +34,7 @@ app.use((req, res, next) => {
 });
 
 // Health check
-app.get('/health', async (req, res) => {
+app.get('/health', async (_req, res) => {
   res.json({
     status: 'healthy',
     service: 'user-service',
@@ -47,7 +47,7 @@ app.get('/health', async (req, res) => {
 app.use('/v1/users', userRoutes);
 
 // 404 handler
-app.use((req, res) => {
+app.use((_req, res) => {
   res.status(404).json({
     success: false,
     error: { message: 'Route not found' },
@@ -55,7 +55,7 @@ app.use((req, res) => {
 });
 
 // Error handler
-app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
+app.use((err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
   const log = req.log || logger;
   log.error({ error: err.message, stack: err.stack }, 'Request error');
 

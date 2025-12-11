@@ -154,7 +154,7 @@ DocumentSchema.methods.addVersion = function(content: string, userId: string) {
 
 // Get specific version
 DocumentSchema.methods.getVersion = function(version: number) {
-  return this.versions.find(v => v.version === version);
+  return this.versions.find((v: IDocumentVersion) => v.version === version);
 };
 
 /**

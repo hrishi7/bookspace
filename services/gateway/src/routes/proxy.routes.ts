@@ -46,21 +46,16 @@ const createProxy = (target: string, auth: 'required' | 'optional' | 'none' = 'n
         }
         
         // Forward user info to backend services
-        // @ts-expect-error - req.user exists from middleware
         if (req.user) {
-          // @ts-expect-error - req.user exists
           proxyReq.setHeader('X-User-ID', req.user.userId);
-          // @ts-expect-error - req.user exists
           proxyReq.setHeader('X-User-Role', req.user.role);
         }
       },
 
       // Log proxy errors
       onError: (err, req, res) => {
-        // @ts-expect-error - req.log exists from middleware
         req.log?.error({ error: err.message }, 'Proxy error');
         
-        // @ts-expect-error - res type
         res.status(502).json({
           success: false,
           error: { message: 'Service temporarily unavailable' },

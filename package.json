@@ -10,16 +10,30 @@
   "scripts": {
     "dev": "npm run dev --workspaces --if-present",
     "build": "npm run build --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present",
+    "test": "jest",
+    "test:unit": "jest --selectProjects unit",
+    "test:integration": "jest --selectProjects integration",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:load": "k6 run tests/load/",
+    "security:audit": "npm audit --audit-level=moderate",
     "lint": "eslint . --ext .ts,.js",
     "format": "prettier --write \"**/*.{ts,js,json,md}\""
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@types/jest": "^30.0.0",
     "@types/node": "^20.10.0",
+    "@types/supertest": "^6.0.3",
     "@typescript-eslint/eslint-plugin": "^6.13.0",
     "@typescript-eslint/parser": "^6.13.0",
     "eslint": "^8.54.0",
+    "jest": "^30.2.0",
+    "k6": "^0.0.0",
     "prettier": "^3.1.0",
+    "supertest": "^7.1.4",
+    "testcontainers": "^11.10.0",
+    "ts-jest": "^29.4.6",
     "typescript": "^5.3.2"
   },
   "engines": {

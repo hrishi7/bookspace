@@ -134,6 +134,10 @@ export interface TokenPayload {
   email: string;
   role: UserRole;
   type: 'access' | 'refresh';
+  exp?: number; // JWT expiration timestamp
+  iat?: number; // JWT issued at timestamp
+  iss?: string; // JWT issuer
+  aud?: string; // JWT audience
 }
 
 export interface AuthTokens {

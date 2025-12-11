@@ -15,10 +15,10 @@ import { config } from '../config';
  */
 export const errorHandler = (
   err: Error,
-  req: Request,
+  _req: Request,
   res: Response,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  next: NextFunction
+  _next: NextFunction
 ) => {
   // Default to 500 if not an AppError
   let statusCode = 500;

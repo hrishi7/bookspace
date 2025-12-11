@@ -55,18 +55,22 @@ router.get('/:docId/comments', async (req: Request, res: Response, next: NextFun
     // Cache miss - fetch and build tree
     comments = await (CommentModel as any).findByDocument(docId);
 
+    if (!comments) {
+      comments = [];
+    }
+
     // Cache for next request
     await cacheComments(docId, comments);
 
     req.log.info({ docId, count: comments.length }, 'Comments retrieved');
 
-    res.json({
+    return res.json({
       success: true,
       data: comments,
       cached: false,
     });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 

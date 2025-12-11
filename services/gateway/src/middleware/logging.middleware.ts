@@ -80,7 +80,7 @@ export const requestLogging = (logger: Logger) => {
  * Must be registered AFTER all routes
  */
 export const errorLogging = (logger: Logger) => {
-  return (err: Error, req: Request, res: Response, next: NextFunction) => {
+  return (err: Error, req: Request, _res: Response, next: NextFunction) => {
     // Log error with full context
     const log = req.log || logger;
     
