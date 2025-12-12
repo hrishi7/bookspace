@@ -52,11 +52,11 @@ app.use(cors({
   credentials: true,
 }));
 
-/**
- * Body Parsing
- */
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// Body Parsing - DISABLED for Gateway
+// Gateway should stream requests directly to services without parsing body
+// This avoids issues where the request stream is consumed before proxying
+// app.use(express.json({ limit: '10mb' }));
+// app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 /**
  * Request Logging & Metrics

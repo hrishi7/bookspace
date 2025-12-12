@@ -20,10 +20,10 @@ export const config = {
 
   services: {
     auth: process.env.AUTH_SERVICE_URL || 'http://localhost:3001',
-    user: process.env.USER_SERVICE_URL || 'http://localhost:3002',
-    document: process.env.DOCUMENT_SERVICE_URL || 'http://localhost:3003',
-    file: process.env.FILE_SERVICE_URL || 'http://localhost:3004',
-    search: process.env.SEARCH_SERVICE_URL || 'http://localhost:3005',
+    user: process.env.USER_SERVICE_URL || 'http://localhost:3003',
+    document: process.env.DOCUMENT_SERVICE_URL || 'http://localhost:3004',
+    file: process.env.FILE_SERVICE_URL || 'http://localhost:3005',
+    search: process.env.SEARCH_SERVICE_URL || 'http://localhost:3006',
   },
 
   rateLimit: {

@@ -40,6 +40,7 @@ const createProxy = (target: string, auth: 'required' | 'optional' | 'none' = 'n
       changeOrigin: true,
       
       // Forward request ID for distributed tracing
+      // Forward request ID for distributed tracing
       onProxyReq: (proxyReq, req) => {
         if (req.id) {
           proxyReq.setHeader('X-Request-ID', req.id);

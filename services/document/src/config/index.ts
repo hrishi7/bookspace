@@ -4,7 +4,7 @@ dotenv.config();
 
 export const config = {
   env: process.env.NODE_ENV || 'development',
-  port: parseInt(process.env.PORT || '3003', 10),
+  port: parseInt(process.env.PORT || '3004', 10),
 
   mongodb: {
     uri: process.env.MONGODB_URI || 'mongodb://localhost:27017/bookspace',

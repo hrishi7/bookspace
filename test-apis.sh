@@ -43,11 +43,11 @@ echo ""
 services=(
     "3000:Gateway"
     "3001:Auth"
-    "3002:User"
-    "3003:Document"
-    "3004:Upload"
-    "3005:Search"
-    "3006:Worker"
+    "3002:Grafana"
+    "3003:User"
+    "3004:Document"
+    "3005:Upload"
+    "3006:Search"
 )
 
 for service in "${services[@]}"; do
@@ -55,7 +55,16 @@ for service in "${services[@]}"; do
     if curl -s -f -o /dev/null "http://localhost:$port/health" 2>/dev/null; then
         print_success "$name service (port $port) is healthy"
     else
-        print_error "$name service (port $port) is not responding"
+        # Grafana health check is different
+        if [ "$name" == "Grafana" ]; then
+             if curl -s -f -o /dev/null "http://localhost:$port/api/health" 2>/dev/null; then
+                print_success "$name service (port $port) is healthy"
+             else
+                print_error "$name service (port $port) is not responding"
+             fi
+        else
+            print_error "$name service (port $port) is not responding"
+        fi
     fi
 done
 
@@ -68,7 +77,7 @@ RANDOM_EMAIL="test_$(date +%s)@example.com"
 
 # Register
 print_info "Registering user: $RANDOM_EMAIL"
-REGISTER_RESPONSE=$(curl -s -X POST "$GATEWAY_URL/api/auth/register" \
+REGISTER_RESPONSE=$(curl -s -X POST "$GATEWAY_URL/v1/auth/signup" \
   -H "Content-Type: application/json" \
   -d "{
     \"email\": \"$RANDOM_EMAIL\",
@@ -87,7 +96,7 @@ echo ""
 
 # Login
 print_info "Logging in..."
-LOGIN_RESPONSE=$(curl -s -X POST "$GATEWAY_URL/api/auth/login" \
+LOGIN_RESPONSE=$(curl -s -X POST "$GATEWAY_URL/v1/auth/login" \
   -H "Content-Type: application/json" \
   -d "{
     \"email\": \"$RANDOM_EMAIL\",
@@ -112,7 +121,7 @@ if [ -n "$ACCESS_TOKEN" ]; then
     echo ""
     
     print_info "Fetching user profile..."
-    PROFILE_RESPONSE=$(curl -s "$GATEWAY_URL/api/users/me" \
+    PROFILE_RESPONSE=$(curl -s "$GATEWAY_URL/v1/users/me" \
       -H "Authorization: Bearer $ACCESS_TOKEN" 2>/dev/null || echo '{"error": true}')
     
     if echo "$PROFILE_RESPONSE" | grep -q "$RANDOM_EMAIL"; then
@@ -123,7 +132,7 @@ if [ -n "$ACCESS_TOKEN" ]; then
     
     echo ""
     print_info "Creating a document..."
-    DOC_RESPONSE=$(curl -s -X POST "$GATEWAY_URL/api/documents" \
+    DOC_RESPONSE=$(curl -s -X POST "$GATEWAY_URL/v1/docs" \
       -H "Authorization: Bearer $ACCESS_TOKEN" \
       -H "Content-Type: application/json" \
       -d '{
@@ -140,7 +149,7 @@ if [ -n "$ACCESS_TOKEN" ]; then
     
     echo ""
     print_info "Searching documents..."
-    SEARCH_RESPONSE=$(curl -s "$GATEWAY_URL/api/search?q=test" \
+    SEARCH_RESPONSE=$(curl -s "$GATEWAY_URL/v1/search?q=test" \
       -H "Authorization: Bearer $ACCESS_TOKEN" 2>/dev/null || echo '{"error": true}')
     
     if echo "$SEARCH_RESPONSE" | grep -q "results"; then
@@ -180,6 +189,6 @@ print_header "Testing Complete!"
 echo ""
 print_info "Management UIs:"
 echo "  • RabbitMQ: http://localhost:15672"
-echo "  • Grafana:  http://localhost:3001"
-echo "  • Prometheus: http://localhost:9090"
+echo "  • Grafana:  http://localhost:3002"
+echo "  • Prometheus: http://localhost:9091"
 echo ""
